@@ -415,9 +415,11 @@ rules:
   problem-details-cites-obsoleted-rfc7807:
     description: >-
       RFC 7807 was obsoleted by RFC 9457 in July 2023. Documentation and links
-      naming 7807 as the governing specification should be updated. The XML
-      namespace urn:ietf:rfc:7807 is unaffected — RFC 9457 Appendix B kept it
-      for backward compatibility — and is not flagged.
+      naming 7807 as the governing specification should be updated. Two things
+      are deliberately not flagged: the XML namespace urn:ietf:rfc:7807, which
+      RFC 9457 Appendix B kept for backward compatibility; and any text that
+      names 7807 while also naming 9457, since that is a document correctly
+      explaining the supersession rather than relying on the old spec.
     message: "{{path}} — cites RFC 7807, which was obsoleted by RFC 9457 in July 2023"
     documentationUrl: https://www.rfc-editor.org/rfc/rfc9457
     severity: info
@@ -430,4 +432,8 @@ rules:
     then:
       function: pattern
       functionOptions:
-        notMatch: "/(rfc[-_ ]?7807|rfc7807)/i"
+        # Fire only where 7807 appears WITHOUT 9457 anywhere in the same value.
+        # The negative lookahead is what keeps this quiet on a document that
+        # says "RFC 9457 obsoleted RFC 7807" — an accurate statement, not a
+        # stale citation. [\s\S] rather than . so it spans multi-line prose.
+        notMatch: "/^(?![\\s\\S]*9457)[\\s\\S]*rfc[-_ ]?7807/i"

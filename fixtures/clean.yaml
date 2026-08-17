@@ -10,7 +10,9 @@ info:
   title: Clean Problem Details API
   description: >-
     A minimal API whose error responses conform to RFC 9457, Problem Details for
-    HTTP APIs.
+    HTTP APIs. RFC 9457 obsoleted RFC 7807 in July 2023 — this sentence names
+    both on purpose, to prove problem-details-cites-obsoleted-rfc7807 does not
+    fire on a document that correctly explains the supersession.
   version: 1.0.0
   license:
     name: Apache-2.0

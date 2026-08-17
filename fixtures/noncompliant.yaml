@@ -8,8 +8,8 @@ openapi: 3.1.0
 info:
   title: Noncompliant Problem Details API
   description: >-
-    Errors follow RFC 7807. Cited deliberately — RFC 7807 was obsoleted by
-    RFC 9457 in July 2023, so problem-details-cites-obsoleted-rfc7807 fires here.
+    Errors follow RFC 7807. Cited deliberately, and with no mention of its
+    successor, so problem-details-cites-obsoleted-rfc7807 fires here.
   version: 1.0.0
 
 externalDocs:
