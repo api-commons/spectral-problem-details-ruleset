@@ -130,4 +130,10 @@ upstream.
 
 ## License
 
-[Apache-2.0](LICENSE) — Copyright 2026 API Commons (Kin Lane).
+Two licenses, by kind of thing:
+
+- **Artifacts** — the schemas, rulesets, fixtures, examples and API descriptions — are
+  **[CC BY-NC-SA 4.0](LICENSE)** (Attribution–NonCommercial–ShareAlike).
+- **Code** — the validator, test harness and packaging — is **[Apache-2.0](LICENSE-CODE)**.
+
+API Commons licenses **artifacts** under CC BY-NC-SA 4.0 and **code** under Apache-2.0.
