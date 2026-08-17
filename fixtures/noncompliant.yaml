@@ -1,0 +1,130 @@
+# NONCOMPLIANT fixture — must fire every rule in problem-details.yaml.
+#
+# Each defect below is one a real API ships. The `status: string` one and the
+# `additionalProperties: false` one are the two that generated schema tooling
+# produces by default and that nobody catches in review.
+
+openapi: 3.1.0
+info:
+  title: Noncompliant Problem Details API
+  description: >-
+    Errors follow RFC 7807. Cited deliberately — RFC 7807 was obsoleted by
+    RFC 9457 in July 2023, so problem-details-cites-obsoleted-rfc7807 fires here.
+  version: 1.0.0
+
+externalDocs:
+  description: Problem Details for HTTP APIs
+  url: https://datatracker.ietf.org/doc/html/rfc7807
+
+servers:
+  - url: https://api.example.com
+
+paths:
+
+  /widgets/{widgetId}:
+    get:
+      summary: Get a widget
+      operationId: getWidget
+      parameters:
+        - name: widgetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The widget.
+          content:
+            application/json:
+              schema:
+                type: object
+
+        # Plain application/json on an error — not identifiable as a problem
+        # detail. Fires problem-details-error-response-media-type.
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+        # No WWW-Authenticate challenge.
+        # Fires problem-details-401-www-authenticate.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/BadProblem'
+
+        # No Retry-After.
+        # Fires problem-details-429-retry-after.
+        '429':
+          description: Too Many Requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/BadProblem'
+
+        '500':
+          description: Internal Server Error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/LeakyProblem'
+              example:
+                # Relative type reference.
+                # Fires problem-details-example-type-absolute-uri.
+                type: internal-error
+                title: Internal Server Error
+                status: 500
+
+components:
+
+  schemas:
+
+    # Fires:
+    #   problem-details-schema-is-object          (no `type: object`)
+    #   problem-details-title-member-defined      (no `title`)
+    #   problem-details-type-is-string            (`type` declared as object)
+    #   problem-details-status-is-number          (`status` declared as string)
+    #   problem-details-detail-is-string          (`detail` declared as integer)
+    #   problem-details-instance-is-string        (`instance` declared as boolean)
+    #   problem-details-type-format-uri           (no `format` on `type`)
+    #   problem-details-allows-extension-members  (`additionalProperties: false`)
+    #   problem-details-response-has-example      (no example on the 401/429)
+    BadProblem:
+      additionalProperties: false
+      properties:
+        type:
+          type: object
+          description: Wrong JSON type — a conforming consumer MUST ignore this member.
+        status:
+          type: string
+          description: Wrong JSON type. The single most common problem detail defect.
+        detail:
+          type: integer
+        instance:
+          type: boolean
+
+    # Fires problem-details-no-implementation-leakage, plus the member-defined
+    # and format rules.
+    LeakyProblem:
+      type: object
+      properties:
+        # No `type` member at all.
+        # Fires problem-details-type-member-defined.
+        title:
+          type: string
+        status:
+          type: integer
+        stackTrace:
+          type: string
+          description: Server stack trace — RFC 9457 Section 5 warns against exactly this.
+        sqlState:
+          type: string
+        debug:
+          type: object

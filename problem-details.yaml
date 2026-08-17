@@ -1,0 +1,433 @@
+# @api-common/spectral-problem-details-ruleset
+#
+# A curated, OWNED, GROUNDED Spectral ruleset for RFC 9457, Problem Details
+# for HTTP APIs. Every rule below is expressed with Spectral's built-in
+# functions only (schema / pattern / enumeration / truthy / defined) so it runs
+# anywhere Spectral runs, with no custom JS.
+#
+# Each rule carries:
+#   - a stable id (the YAML key, e.g. problem-details-status-is-number)
+#   - a description naming the section of RFC 9457 it comes from
+#   - a message shown on a finding
+#   - a severity
+#   - a documentationUrl pointing at the specific RFC section
+#
+# Provenance: RFC 9457, Problem Details for HTTP APIs (July 2023).
+#   https://www.rfc-editor.org/rfc/rfc9457
+#   Obsoletes RFC 7807.
+#
+# TWO THINGS THIS RULESET DELIBERATELY DOES NOT DO.
+#
+# 1. It does not check that a problem detail's "status" member matches the HTTP
+#    status code of the response carrying it. RFC 9457 Section 3.1.2 requires
+#    generators to use the same code in both, and Section 5 calls the potential
+#    disagreement out as a security consideration — but comparing a response
+#    key ("404") against a value nested inside that response's example is not
+#    expressible with Spectral's built-in functions. It is a runtime check.
+#    We flag it in the README as a residual rather than shipping a rule that
+#    only appears to cover it.
+#
+# 2. It does not flag `urn:ietf:rfc:7807`. RFC 9457 Appendix B RETAINED that
+#    namespace for the XML serialization, for backward compatibility. A
+#    document using it is correct, not stale. Only prose and link references to
+#    RFC 7807 as the governing specification are flagged, by
+#    problem-details-cites-obsoleted-rfc7807 below.
+#
+# License: Apache-2.0 — Copyright 2026 API Commons (Kin Lane).
+
+extends: []
+
+aliases:
+  ProblemJsonSchema:
+    - "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[*].content[application/problem+json].schema"
+  ProblemJsonProperties:
+    - "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[*].content[application/problem+json].schema.properties"
+  ErrorResponses:
+    - "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[?(@property.match(/^[45]\\d\\d$/))]"
+
+rules:
+
+  # =========================================================================
+  # The media type. RFC 9457 Section 3.
+  #
+  # "when serialized as a JSON document, it uses the application/problem+json
+  #  media type ... the application/problem+xml media type."
+  #
+  # An error response that returns application/json instead is not a problem
+  # detail. It may carry the same five members, but no generic consumer can
+  # know that, which defeats the entire purpose of the specification: not
+  # having to define a new error format per API.
+  # =========================================================================
+
+  problem-details-error-response-media-type:
+    description: >-
+      RFC 9457 Section 3. Every 4xx and 5xx response should return a problem
+      detail, using the application/problem+json or application/problem+xml
+      media type. An error returned as plain application/json is not
+      identifiable as a problem detail by a generic consumer.
+    message: "{{path}} — 4xx/5xx response does not offer application/problem+json or application/problem+xml"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3
+    severity: warn
+    formats: [oas3]
+    given: "#ErrorResponses.content"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["application/problem+json"]
+            - required: ["application/problem+xml"]
+
+  # =========================================================================
+  # The shape of the object. RFC 9457 Section 3.1.
+  #
+  # "Problem detail objects can have the following members. If a member's
+  #  value type does not match the specified type, the member MUST be ignored
+  #  -- i.e., processing will continue as if the member had not been present."
+  #
+  # That MUST is what makes the type rules below matter more than they look.
+  # A `status` declared as a string does not fail loudly at the consumer; it
+  # vanishes. Every one of these rules is guarding against a member being
+  # silently dropped by a conforming client.
+  # =========================================================================
+
+  problem-details-schema-is-object:
+    description: >-
+      RFC 9457 Section 3. A problem detail is a JSON object. The schema behind
+      an application/problem+json response must declare type object.
+    message: "{{path}} — problem detail schema must declare `type: object`"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3
+    severity: error
+    formats: [oas3]
+    given: "#ProblemJsonSchema"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["type"]
+          properties:
+            type:
+              const: object
+
+  problem-details-type-member-defined:
+    description: >-
+      RFC 9457 Section 3.1.1. The type member is the problem type's primary
+      identifier — "Consumers MUST use the type URI (after resolution, if
+      necessary) as the problem type's primary identifier." A problem schema
+      that never declares it forces consumers back onto the HTTP status code,
+      which is the situation the specification exists to improve on.
+    message: "{{path}} — problem detail schema does not define a `type` member"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+    severity: warn
+    formats: [oas3]
+    given: "#ProblemJsonProperties"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["type"]
+
+  problem-details-title-member-defined:
+    description: >-
+      RFC 9457 Section 3.1.3. The title member is the short human-readable
+      summary shown to people who cannot resolve the type URI — during offline
+      log analysis, for example. Without it a problem detail is unreadable to a
+      human holding only the payload.
+    message: "{{path}} — problem detail schema does not define a `title` member"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.3
+    severity: warn
+    formats: [oas3]
+    given: "#ProblemJsonProperties"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["title"]
+
+  problem-details-type-is-string:
+    description: >-
+      RFC 9457 Section 3.1.1. The type member is a JSON string containing a URI
+      reference. Declared as any other JSON type, a conforming consumer MUST
+      ignore it (Section 3.1), so the problem loses its identifier silently.
+    message: "{{path}} — `type` must be a string (a URI reference), not another JSON type"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+    severity: error
+    formats: [oas3]
+    given: "#ProblemJsonProperties.type"
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values:
+          - string
+
+  problem-details-status-is-number:
+    description: >-
+      RFC 9457 Section 3.1.2. The status member is a JSON number. Declaring it
+      as a string is the single most common mistake in problem detail schemas,
+      and it fails silently — Section 3.1 requires a consumer to ignore any
+      member whose value type does not match.
+    message: "{{path}} — `status` must be a number (use `integer`), not a string"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.2
+    severity: error
+    formats: [oas3]
+    given: "#ProblemJsonProperties.status"
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values:
+          - integer
+          - number
+
+  problem-details-detail-is-string:
+    description: >-
+      RFC 9457 Section 3.1.4. The detail member is a JSON string carrying a
+      human-readable explanation specific to this occurrence.
+    message: "{{path}} — `detail` must be a string"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.4
+    severity: error
+    formats: [oas3]
+    given: "#ProblemJsonProperties.detail"
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values:
+          - string
+
+  problem-details-instance-is-string:
+    description: >-
+      RFC 9457 Section 3.1.5. The instance member is a JSON string containing a
+      URI reference identifying the specific occurrence of the problem.
+    message: "{{path}} — `instance` must be a string (a URI reference)"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.5
+    severity: error
+    formats: [oas3]
+    given: "#ProblemJsonProperties.instance"
+    then:
+      field: type
+      function: enumeration
+      functionOptions:
+        values:
+          - string
+
+  # =========================================================================
+  # Extensibility. RFC 9457 Section 3.2.
+  #
+  # "Problem type definitions MAY extend the problem details object with
+  #  additional members that are specific to that problem type ... Clients
+  #  consuming problem details MUST ignore any such extensions that they don't
+  #  recognize; this allows problem types to evolve."
+  #
+  # A schema with `additionalProperties: false` forbids exactly the mechanism
+  # the specification builds its evolution story on. This is the rule most
+  # worth having: it is invisible in review, generated by default by several
+  # schema tools, and it quietly caps the format.
+  # =========================================================================
+
+  problem-details-allows-extension-members:
+    description: >-
+      RFC 9457 Section 3.2. Problem types MAY extend the object with additional
+      members, and consumers MUST ignore ones they do not recognize — that is
+      how problem types evolve. A schema declaring additionalProperties false
+      forbids the extension mechanism outright. Leave it unset, or set it to a
+      schema, but do not set it to false.
+    message: "{{path}} — `additionalProperties: false` forbids the extension members RFC 9457 Section 3.2 depends on"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.2
+    severity: warn
+    formats: [oas3]
+    given: "#ProblemJsonSchema.additionalProperties"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          not:
+            const: false
+
+  # =========================================================================
+  # Type URIs. RFC 9457 Section 3.1.1.
+  #
+  # "it is RECOMMENDED that absolute URIs be used in type when possible and
+  #  that when relative URIs are used, they include the full path"
+  # =========================================================================
+
+  problem-details-type-format-uri:
+    description: >-
+      RFC 9457 Section 3.1.1. The type member holds a URI reference. Declaring
+      `format: uri` (or `uri-reference`) on it documents that for consumers and
+      code generators, and lets schema validation catch a bare token where a
+      URI belongs.
+    message: "{{path}} — `type` should declare `format: uri` or `format: uri-reference`"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+    severity: info
+    formats: [oas3]
+    given: "#ProblemJsonProperties.type"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: ["format"]
+          properties:
+            format:
+              enum: ["uri", "uri-reference"]
+
+  problem-details-example-type-absolute-uri:
+    description: >-
+      RFC 9457 Section 3.1.1. Absolute type URIs are RECOMMENDED. A relative
+      reference resolves against the document base URI, so the same token in
+      two different resources identifies two different problem types — the
+      specification calls this out as a source of confusion.
+    message: "{{path}} — example `type` should be an absolute URI (or `about:blank`), not a relative reference"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3.1.1
+    severity: info
+    formats: [oas3]
+    given: "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[*].content[application/problem+json].example.type"
+    then:
+      function: pattern
+      functionOptions:
+        match: "^([a-zA-Z][a-zA-Z0-9+.-]*:|about:blank$)"
+
+  # =========================================================================
+  # Documenting the error, not just typing it.
+  # =========================================================================
+
+  problem-details-response-has-example:
+    description: >-
+      An error response carrying a problem detail should ship an example.
+      Problem details are read by humans under time pressure during an
+      incident, and the five members are abstract until someone sees them
+      filled in.
+    message: "{{path}} — problem detail response has no `example` or `examples`"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-3
+    severity: info
+    formats: [oas3]
+    given: "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[*].content[application/problem+json]"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["example"]
+            - required: ["examples"]
+
+  # =========================================================================
+  # Headers that belong with specific error codes.
+  #
+  # These are HTTP requirements rather than RFC 9457 ones, but they land on
+  # exactly the responses a problem detail ruleset is already looking at, and
+  # a 401 with a problem body and no challenge is a real interoperability bug.
+  #
+  # NOTE ON CASE: HTTP field names are case-insensitive, but an OpenAPI
+  # document's `headers` map is a literal JSON object, and JSON Schema has no
+  # case-insensitive `required`. These rules accept the two spellings that
+  # occur in practice rather than pretending to be exhaustive.
+  # =========================================================================
+
+  problem-details-401-www-authenticate:
+    description: >-
+      RFC 9110 Section 11.6.1. A 401 response MUST include a WWW-Authenticate
+      header carrying at least one challenge. A problem detail explaining the
+      401 does not substitute for the challenge — a generic HTTP client needs
+      the header to know how to authenticate.
+    message: "{{path}} — 401 response does not document a `WWW-Authenticate` header"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9110#section-11.6.1
+    severity: warn
+    formats: [oas3]
+    given: "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[401]"
+    then:
+      field: headers
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["WWW-Authenticate"]
+            - required: ["www-authenticate"]
+
+  problem-details-429-retry-after:
+    description: >-
+      RFC 6585 Section 4 and RFC 9110 Section 10.2.3. A 429 response should
+      tell the client how long to wait, via Retry-After. A problem detail that
+      says "you have exceeded the rate limit" without it leaves the client to
+      guess, which is how retry storms start.
+    message: "{{path}} — 429 response does not document a `Retry-After` header"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9110#section-10.2.3
+    severity: warn
+    formats: [oas3]
+    given: "$.paths[*][get,put,post,delete,options,head,patch,trace].responses[429]"
+    then:
+      field: headers
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: ["Retry-After"]
+            - required: ["retry-after"]
+
+  # =========================================================================
+  # Security. RFC 9457 Section 5.
+  #
+  # "Generators providing links to occurrence information are encouraged to
+  #  avoid making implementation details such as a stack dump available
+  #  through the HTTP interface, since this can expose sensitive details of
+  #  the server implementation, its data, and so on."
+  #
+  # A problem detail schema that declares a stack trace member is not a leak
+  # by itself — it is a leak someone has designed in and documented.
+  # =========================================================================
+
+  problem-details-no-implementation-leakage:
+    description: >-
+      RFC 9457 Section 5. Problem details are attacker-visible. A schema that
+      declares members for stack traces, exceptions, SQL, or raw debug output
+      publishes server implementation detail as part of the contract. Keep that
+      information in your logs, correlated by the `instance` URI.
+    message: "{{property}} — problem detail schemas should not declare implementation-detail members (RFC 9457 Section 5)"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457#section-5
+    severity: warn
+    formats: [oas3]
+    given: "#ProblemJsonProperties.*~"
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/^(stack|stacktrace|stack_trace|stackTrace|trace|traceback|exception|innerException|inner_exception|debug|debugInfo|sql|sqlState|query|dump)$/i"
+
+  # =========================================================================
+  # Provenance of the citation itself.
+  #
+  # RFC 7807 was obsoleted by RFC 9457 in July 2023. A document still pointing
+  # at 7807 as its governing specification is citing a superseded standard.
+  #
+  # This rule does NOT fire on `urn:ietf:rfc:7807` — RFC 9457 Appendix B
+  # retained that namespace for the XML serialization, so it remains correct.
+  # The negative lookahead on the colon is what keeps the two apart, and
+  # fixtures/clean.yaml carries the namespace specifically to prove it.
+  # =========================================================================
+
+  problem-details-cites-obsoleted-rfc7807:
+    description: >-
+      RFC 7807 was obsoleted by RFC 9457 in July 2023. Documentation and links
+      naming 7807 as the governing specification should be updated. The XML
+      namespace urn:ietf:rfc:7807 is unaffected — RFC 9457 Appendix B kept it
+      for backward compatibility — and is not flagged.
+    message: "{{path}} — cites RFC 7807, which was obsoleted by RFC 9457 in July 2023"
+    documentationUrl: https://www.rfc-editor.org/rfc/rfc9457
+    severity: info
+    formats: [oas3]
+    given:
+      - "$.info.description"
+      - "$.externalDocs.url"
+      - "$.externalDocs.description"
+      - "$.paths[*][get,put,post,delete,options,head,patch,trace].externalDocs.url"
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "/(rfc[-_ ]?7807|rfc7807)/i"
