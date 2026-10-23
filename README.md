@@ -1,6 +1,6 @@
 # @api-common/spectral-problem-details-ruleset
 
-A curated, **owned**, **grounded** [Spectral](https://github.com/stoplightio/spectral)
+A curated, **owned**, **grounded** [OpenLint](https://openlint.org) (and [Spectral](https://github.com/stoplightio/spectral))
 ruleset for **[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457), Problem Details for
 HTTP APIs** — check that your error responses are actually problem details, in one line.
 
@@ -22,8 +22,8 @@ Or run it directly:
 spectral lint openapi.yaml -r https://raw.githubusercontent.com/api-commons/spectral-problem-details-ruleset/main/problem-details.yaml
 ```
 
-Every rule uses Spectral's **built-in functions only** — no custom JavaScript — so it runs
-anywhere Spectral runs, including in a browser.
+Every rule uses the **built-in functions only** that OpenLint and Spectral share — no custom JavaScript — so it runs
+anywhere either runs, including in a browser.
 
 ## Why a problem details ruleset
 
@@ -80,7 +80,7 @@ consumer.
 **It does not check that `status` matches the response's HTTP status code.** RFC 9457
 §3.1.2 requires generators to use the same code in both, and §5 raises the disagreement
 as a security consideration — but comparing a response key (`"404"`) against a value
-nested inside that response's example is not expressible with Spectral's built-in
+nested inside that response's example is not expressible with the built-in
 functions. It is a runtime check. We flag it here as a **residual** rather than shipping a
 rule that only appears to cover it.
 

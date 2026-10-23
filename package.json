@@ -1,7 +1,7 @@
 {
   "name": "@api-common/spectral-problem-details-ruleset",
   "version": "0.1.0",
-  "description": "A curated, owned, grounded Stoplight Spectral ruleset for RFC 9457 Problem Details for HTTP APIs \u2014 check that your error responses are actually problem details, in one line. An API Commons tool.",
+  "description": "A curated, owned, grounded Stoplight Spectral ruleset for RFC 9457 Problem Details for HTTP APIs — check that your error responses are actually problem details, in one line. An API Commons tool.",
   "type": "module",
   "license": "CC-BY-NC-SA-4.0 AND Apache-2.0",
   "author": "API Evangelist (https://apievangelist.com)",
@@ -14,6 +14,7 @@
     "url": "https://github.com/api-commons/spectral-problem-details-ruleset/issues"
   },
   "keywords": [
+    "openlint",
     "spectral",
     "problem-details",
     "rfc9457",
@@ -40,12 +41,12 @@
     "node": ">=18"
   },
   "scripts": {
-    "lint:noncompliant": "spectral lint fixtures/noncompliant.yaml -r problem-details.yaml -f json",
-    "lint:clean": "spectral lint fixtures/clean.yaml -r problem-details.yaml -f json",
+    "lint:noncompliant": "openlint lint fixtures/noncompliant.yaml -r problem-details.yaml -f json",
+    "lint:clean": "openlint lint fixtures/clean.yaml -r problem-details.yaml -f json",
     "test": "node scripts/test-ruleset.mjs"
   },
   "devDependencies": {
-    "@stoplight/spectral-cli": "^6.11.1"
+    "openlint": "^1.0.0"
   },
   "publishConfig": {
     "access": "public"
